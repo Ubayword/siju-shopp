@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:siju_shopp/feature/checkout/checkout_page.dart';
 import '../../core/app_colors.dart';
 import '../../core/models/product_model.dart';
 import '../../core/services/product_service.dart';
@@ -56,13 +57,13 @@ class _HomePageState extends State<HomePage> {
                           borderRadius: BorderRadius.circular(25),
                           border: Border.all(color: Colors.grey.shade200),
                         ),
-                        child: Row(
+                        child: const Row(
                           children: [
-                            const Icon(Icons.search, color: Colors.grey),
-                            const SizedBox(width: 10),
+                            Icon(Icons.search, color: Colors.grey),
+                            SizedBox(width: 10),
                             Expanded(
                               child: TextField(
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   hintText: "Search curated collections...",
                                   hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
                                   border: InputBorder.none,
@@ -73,9 +74,15 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 15),
-                    const Icon(Icons.shopping_bag_outlined, color: AppColors.primaryBlue, size: 28),
-                  ],
+              const SizedBox(width: 15),
+              IconButton(
+                icon: const Icon(Icons.shopping_bag_outlined, color: AppColors.primaryBlue, size: 28),
+                onPressed: () {
+                  // Navigasi ke Keranjang/Checkout saat ikon tas diklik
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const CheckoutPage()));
+                },
+              ),
+            ],
                 ),
                 
                 const SizedBox(height: 24),
@@ -87,7 +94,6 @@ class _HomePageState extends State<HomePage> {
                   decoration: BoxDecoration(
                     color: AppColors.primaryBlue,
                     borderRadius: BorderRadius.circular(24),
-                    // Sedikit bayangan biru agar elegan
                     boxShadow: [
                       BoxShadow(color: AppColors.primaryBlue.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
                     ],
@@ -126,7 +132,7 @@ class _HomePageState extends State<HomePage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("Categories", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                    const Text("Categories", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
                     TextButton(
                       onPressed: () {},
                       child: const Text("View all", style: TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.bold)),
@@ -134,14 +140,14 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
 
-                // 4. CATEGORIES GRID (Pakai Icon bawaan Flutter)
+                // 4. CATEGORIES GRID
                 GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisCount: 2,
                   crossAxisSpacing: 15,
                   mainAxisSpacing: 15,
-                  childAspectRatio: 2.2, // Mengatur agar bentuknya persegi panjang menyamping
+                  childAspectRatio: 2.2, 
                   children: [
                     _buildCategoryItem(Icons.laptop_chromebook, "Electronics"),
                     _buildCategoryItem(Icons.checkroom, "Fashion"),
@@ -153,10 +159,10 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 30),
 
                 // 5. TRENDING NOW TITLE
-                const Text("Trending Now", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                const Text("Trending Now", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
                 const SizedBox(height: 15),
 
-                // 6. PRODUCT GRID DARI API
+                // 6. PRODUCT GRID DARI API TERBARU
                 FutureBuilder<List<ProductData>>(
                   future: _productsFuture,
                   builder: (context, snapshot) {
@@ -178,21 +184,23 @@ class _HomePageState extends State<HomePage> {
                         crossAxisCount: 2,
                         crossAxisSpacing: 15,
                         mainAxisSpacing: 15,
-                        childAspectRatio: 0.65, // Sesuaikan proporsi kartu
+                        childAspectRatio: 0.60, // Diperpanjang sedikit agar tidak terpotong
                       ),
                       itemBuilder: (context, index) {
                         final product = products[index];
-                        final firstVariant = product.variants.isNotEmpty ? product.variants.first : null;
-                        final String imageUrl = firstVariant?.imageUrl ?? 'https://via.placeholder.com/200';
-                        final num price = firstVariant?.price ?? 0;
+                        
+                        // Logika mengambil gambar: Prioritaskan properti 'images', jika kosong pakai placeholder
+                        final String imageUrl = product.images.isNotEmpty 
+                            ? product.images.first.imageUrl 
+                            : 'https://via.placeholder.com/200';
 
-                        return _buildProductCard(context, product, imageUrl, price);
+                        return _buildProductCard(context, product, imageUrl);
                       },
                     );
                   },
                 ),
                 
-                const SizedBox(height: 40), // Spasi kosong untuk BottomNav
+                const SizedBox(height: 40), 
               ],
             ),
           ),
@@ -201,7 +209,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Widget Helper untuk Kotak Kategori
   Widget _buildCategoryItem(IconData icon, String title) {
     return Container(
       decoration: BoxDecoration(
@@ -214,14 +221,13 @@ class _HomePageState extends State<HomePage> {
         children: [
           Icon(icon, color: AppColors.primaryBlue, size: 24),
           const SizedBox(width: 12),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textDark)),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
         ],
       ),
     );
   }
 
-  // Widget Helper untuk Kartu Produk Desain Baru
-  Widget _buildProductCard(BuildContext context, ProductData product, String imageUrl, num price) {
+  Widget _buildProductCard(BuildContext context, ProductData product, String imageUrl) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -238,7 +244,6 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Gambar Produk dengan Icon Hati
             Stack(
               children: [
                 ClipRRect(
@@ -267,7 +272,6 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             
-            // Detail Teks
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
@@ -277,23 +281,30 @@ class _HomePageState extends State<HomePage> {
                     product.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textDark),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black),
                   ),
                   const SizedBox(height: 4),
-                  // Kita pakai Type sebagai subtitle karena desain butuh teks abu-abu
+                  // Menggunakan shortDescription dari API
                   Text(
-                    product.type,
-                    style: const TextStyle(color: AppColors.textGrey, fontSize: 11),
+                    product.shortDescription ?? product.type,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.grey, fontSize: 11),
                   ),
                   const SizedBox(height: 12),
+                  Text(
+                    _currencyFormat.format(product.price),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primaryBlue),
+                  ),
+                  const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // Menampilkan jumlah terjual dari API terbaru
                       Text(
-                        _currencyFormat.format(price),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primaryBlue),
+                        "${product.soldCount} terjual", 
+                        style: const TextStyle(fontSize: 10, color: Colors.grey)
                       ),
-                      // Badge Rating
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(

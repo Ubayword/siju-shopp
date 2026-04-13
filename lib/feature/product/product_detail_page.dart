@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import '../../core/app_colors.dart';
 import '../../core/models/product_model.dart';
 import '../../core/services/product_service.dart';
+import '../../core/services/cart_service.dart';
+import '../checkout/checkout_page.dart'; // Import halaman checkout
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -17,10 +19,18 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   late Future<ProductData> _productFuture;
   final _currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
 
+  // State untuk menyimpan varian yang sedang dipilih user
+  ProductVariant? _selectedVariant;
+
   @override
   void initState() {
     super.initState();
     _productFuture = _productService.getProductDetail(widget.productId);
+  }
+
+  String _stripHtml(String htmlString) {
+    RegExp exp = RegExp(r"<[^>]*>", multiLine: true, caseSensitive: true);
+    return htmlString.replaceAll(exp, '').trim();
   }
 
   @override
@@ -35,164 +45,130 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.search, color: AppColors.textDark), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.share_outlined, color: AppColors.textDark), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.shopping_bag_outlined, color: AppColors.textDark), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.shopping_bag_outlined, color: AppColors.textDark), 
+            onPressed: () {
+              // Navigasi ke Keranjang/Checkout saat ikon tas diklik
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const CheckoutPage()));
+            }
+          ),
+          const SizedBox(width: 10),
         ],
       ),
-      bottomNavigationBar: _buildBottomBar(),
       body: FutureBuilder<ProductData>(
         future: _productFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+          if (snapshot.hasError) return Center(child: Text("${snapshot.error}"));
           
           final product = snapshot.data!;
-          final variant = product.variants.isNotEmpty ? product.variants.first : null;
+          final String imageUrl = product.images.isNotEmpty ? product.images.first.imageUrl : 'https://via.placeholder.com/400';
 
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                //Gambar Utama & Badge
-                Stack(
-                  children: [
-                    Container(
-                      height: 400,
-                      width: double.infinity,
-                      margin: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppColors.backgroundLight,
-                        borderRadius: BorderRadius.circular(30),
-                        image: DecorationImage(
-                          image: NetworkImage(variant?.imageUrl ?? 'https://via.placeholder.com/400'),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 40,
-                      left: 40,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(color: Colors.teal, borderRadius: BorderRadius.circular(8)),
-                        child: const Text("NEW ARRIVAL", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
+          // LOGIKA HARGA: Jika user belum memilih varian, pilih varian pertama otomatis
+          final variantToDisplay = _selectedVariant ?? (product.variants.isNotEmpty ? product.variants.first : null);
+          
+          // Harga tampil: Harga varian terpilih. Jika tidak ada/0, pakai harga produk
+          final priceToDisplay = variantToDisplay != null && variantToDisplay.price > 0 ? variantToDisplay.price : product.price;
 
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("LIMITED EDITION", style: TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.bold, fontSize: 12)),
-                      const SizedBox(height: 8),
-                      Text(product.name, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Text(_currencyFormat.format(variant?.price ?? 0), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryBlue)),
-                          const SizedBox(width: 10),
-                          Text(_currencyFormat.format((variant?.price ?? 0) * 1.2), style: const TextStyle(fontSize: 14, color: Colors.grey, decoration: TextDecoration.lineThrough)),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 25),
-                      const Text("SELECT PALETTE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textDark)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          _buildColorDot(Colors.grey.shade300, true),
-                          _buildColorDot(Colors.black, false),
-                          _buildColorDot(Colors.blueGrey, false),
-                          _buildColorDot(Colors.brown, false),
-                        ],
-                      ),
-
-                      const SizedBox(height: 25),
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("SELECT SIZE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textDark)),
-                          Text("Size Guide", style: TextStyle(color: AppColors.primaryBlue, fontSize: 12, decoration: TextDecoration.underline)),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildSizeBtn("EU 40", false),
-                          _buildSizeBtn("EU 41", true),
-                          _buildSizeBtn("EU 42", false),
-                          _buildSizeBtn("EU 43", false),
-                        ],
-                      ),
-
-                      const SizedBox(height: 30),
-                      // Deskripsi Box
+                      // Gambar Utama
                       Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(color: AppColors.backgroundLight, borderRadius: BorderRadius.circular(24)),
+                        height: 400, width: double.infinity, margin: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(color: AppColors.backgroundLight, borderRadius: BorderRadius.circular(30)),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(30),
+                          child: Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (c,e,s) => const Icon(Icons.image, size: 50, color: Colors.grey)),
+                        ),
+                      ),
+
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("THE NARRATIVE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            Text(product.type.toUpperCase(), style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.bold, fontSize: 12)),
+                            const SizedBox(height: 8),
+                            Text(product.name, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                             const SizedBox(height: 12),
-                            Text(product.description ?? "Crafted for the modern wanderer...", style: const TextStyle(color: AppColors.textGrey, height: 1.5)),
-                            const SizedBox(height: 20),
-                            const Row(
-                              children: [
-                                Icon(Icons.eco, size: 16, color: AppColors.primaryBlue),
-                                SizedBox(width: 8),
-                                Text("SUSTAINABLE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                                SizedBox(width: 20),
-                                Icon(Icons.auto_awesome, size: 16, color: AppColors.primaryBlue),
-                                SizedBox(width: 8),
-                                Text("ARTISAN MADE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                              ],
-                            )
+                            
+                            // Harga (Dinamis berubah saat varian diklik)
+                            Text(_currencyFormat.format(priceToDisplay), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primaryBlue)),
+                            const SizedBox(height: 25),
+                            
+                            // List Varian Dinamis (Bisa diklik)
+                            if (product.variants.isNotEmpty) ...[
+                              const Text("PILIH VARIAN", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.textDark)),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 10, runSpacing: 10,
+                                children: product.variants.map((v) {
+                                  // Cek apakah varian ini yang sedang aktif
+                                  bool isActive = _selectedVariant == v || (_selectedVariant == null && v == product.variants.first);
+                                  return GestureDetector(
+                                    onTap: () => setState(() => _selectedVariant = v), // Update UI saat diklik
+                                    child: _buildVariantBtn(v.name, isActive),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 30),
+                            ],
+
+                            // Deskripsi Box
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(color: AppColors.backgroundLight, borderRadius: BorderRadius.circular(24)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text("DESKRIPSI PRODUK", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  const SizedBox(height: 12),
+                                  Text(_stripHtml(product.description ?? "Tidak ada deskripsi tersedia."), style: const TextStyle(color: AppColors.textGrey, height: 1.5)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 40),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 40),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              // Bottom Bar dipindah ke sini agar bisa mengakses data product
+              _buildBottomBar(context, product, variantToDisplay),
+            ],
           );
         },
       ),
     );
   }
 
-  Widget _buildColorDot(Color color, bool active) {
-    return Container(
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: active ? AppColors.primaryBlue : Colors.transparent, width: 2)),
-      child: CircleAvatar(backgroundColor: color, radius: 14),
-    );
-  }
-
-  Widget _buildSizeBtn(String text, bool active) {
+  Widget _buildVariantBtn(String text, bool isActive) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: active ? AppColors.primaryBlue : Colors.white,
+        color: isActive ? AppColors.primaryBlue : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: active ? AppColors.primaryBlue : Colors.grey.shade200),
+        border: Border.all(color: isActive ? AppColors.primaryBlue : Colors.grey.shade300),
       ),
-      child: Text(text, style: TextStyle(color: active ? Colors.white : AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 12)),
+      child: Text(text, style: TextStyle(color: isActive ? Colors.white : AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 12)),
     );
   }
 
-  Widget _buildBottomBar() {
+  Widget _buildBottomBar(BuildContext context, ProductData product, ProductVariant? selectedVariant) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))]
+      ),
       child: SafeArea(
         child: Row(
           children: [
@@ -204,7 +180,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             const SizedBox(width: 15),
             Expanded(
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  // MASUKKAN KE KERANJANG LALU TAMPILKAN NOTIFIKASI
+                  CartService().addToCart(product, selectedVariant);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Berhasil ditambahkan ke keranjang!'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      action: SnackBarAction(
+                        label: 'LIHAT', textColor: Colors.white,
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CheckoutPage())),
+                      ),
+                    )
+                  );
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryBlue,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
