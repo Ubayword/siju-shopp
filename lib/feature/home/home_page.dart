@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:siju_shopp/feature/checkout/checkout_page.dart';
+import 'package:siju_shopp/core/services/wishlist_service.dart';
+import 'package:siju_shopp/feature/cart/cart_page.dart';
+import 'package:siju_shopp/feature/search/search_page.dart';
 import '../../core/app_colors.dart';
 import '../../core/models/product_model.dart';
 import '../../core/services/product_service.dart';
+import '../../core/services/category_service.dart'; // Import Service Kategori
 import '../product/product_detail_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -15,19 +18,54 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ProductService _productService = ProductService();
+  final CategoryService _categoryService = CategoryService();
+  
   late Future<List<ProductData>> _productsFuture;
+  late Future<List<CategoryData>> _categoriesFuture;
+  
   final _currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _productsFuture = _productService.getProducts();
+    _loadData();
   }
 
-  Future<void> _refreshProducts() async {
+  void _loadData() {
+    _productsFuture = _productService.getProducts();
+    _categoriesFuture = _categoryService.getCategories();
+  }
+
+  Future<void> _refreshData() async {
     setState(() {
-      _productsFuture = _productService.getProducts();
+      _loadData();
     });
+  }
+
+  // Fungsi untuk memetakan nama kategori ke ikon bawaan Flutter
+  IconData _getCategoryIcon(String categoryName) {
+    String name = categoryName.toLowerCase();
+    if (name.contains('electronic') || name.contains('elektronik') || name.contains('laptop')) return Icons.laptop_chromebook;
+    if (name.contains('fashion') || name.contains('baju') || name.contains('pakaian')) return Icons.checkroom;
+    if (name.contains('home') || name.contains('rumah') || name.contains('furniture')) return Icons.chair_outlined;
+    if (name.contains('footwear') || name.contains('sepatu')) return Icons.directions_run;
+    if (name.contains('food') || name.contains('makanan')) return Icons.fastfood_outlined;
+    return Icons.category_outlined; // Ikon default
+  }
+
+  void _handleSearch(String query) {
+    if (query.trim().isNotEmpty) {
+      // Mengarahkan ke SearchPage dengan membawa query
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SearchPage(initialQuery: query),
+        ),
+      );
+      // Opsional: Kosongkan field di Home setelah pindah
+      _searchController.clear();
+    }
   }
 
   @override
@@ -36,7 +74,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: AppColors.backgroundLight,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _refreshProducts,
+          onRefresh: _refreshData,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -45,7 +83,7 @@ class _HomePageState extends State<HomePage> {
               children: [
                 const SizedBox(height: 20),
                 
-                // 1. HEADER (Search & Icons)
+                // 1. HEADER (Search Dinamis)
                 Row(
                   children: [
                     Expanded(
@@ -57,16 +95,22 @@ class _HomePageState extends State<HomePage> {
                           borderRadius: BorderRadius.circular(25),
                           border: Border.all(color: Colors.grey.shade200),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.search, color: Colors.grey),
-                            SizedBox(width: 10),
+                            const Icon(Icons.search, color: Colors.grey),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: TextField(
-                                decoration: InputDecoration(
-                                  hintText: "Search curated collections...",
-                                  hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                                  border: InputBorder.none,
+                                controller: _searchController,
+                                onSubmitted: _handleSearch,
+                                readOnly: true, // Ubah jadi readOnly agar user diarahkan ke SearchPage
+                                onTap: () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SearchPage()));
+                                },
+                                decoration: const InputDecoration(
+                                hintText: "Search curated collections...",
+                                hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                                border: InputBorder.none,
                                 ),
                               ),
                             ),
@@ -74,20 +118,19 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-              const SizedBox(width: 15),
-              IconButton(
-                icon: const Icon(Icons.shopping_bag_outlined, color: AppColors.primaryBlue, size: 28),
-                onPressed: () {
-                  // Navigasi ke Keranjang/Checkout saat ikon tas diklik
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const CheckoutPage()));
-                },
-              ),
-            ],
+                    const SizedBox(width: 15),
+                    IconButton(
+                      icon: const Icon(Icons.shopping_bag_outlined, color: AppColors.primaryBlue, size: 28),
+                      onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CartPage()));
+                      },
+                  ),
+                  ],
                 ),
                 
                 const SizedBox(height: 24),
 
-                // 2. BANNER
+                // 2. BANNER (Desain Mobile Tetap Dipertahankan)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
@@ -140,20 +183,36 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
 
-                // 4. CATEGORIES GRID
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 15,
-                  mainAxisSpacing: 15,
-                  childAspectRatio: 2.2, 
-                  children: [
-                    _buildCategoryItem(Icons.laptop_chromebook, "Electronics"),
-                    _buildCategoryItem(Icons.checkroom, "Fashion"),
-                    _buildCategoryItem(Icons.chair_outlined, "Home"),
-                    _buildCategoryItem(Icons.directions_run, "Footwear"),
-                  ],
+                // 4. CATEGORIES GRID (DINAMIS DARI API)
+                FutureBuilder<List<CategoryData>>(
+                  future: _categoriesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    } else if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const Text("Belum ada kategori", style: TextStyle(color: Colors.grey));
+                    }
+
+                    final categories = snapshot.data!;
+                    // Ambil maksimal 4 kategori agar desain UI tetap rapi seperti mock-up awal
+                    final displayCategories = categories.take(4).toList();
+
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: displayCategories.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 15,
+                        mainAxisSpacing: 15,
+                        childAspectRatio: 2.2, 
+                      ),
+                      itemBuilder: (context, index) {
+                        final cat = displayCategories[index];
+                        return _buildCategoryItem(_getCategoryIcon(cat.name), cat.name);
+                      },
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 30),
@@ -162,7 +221,7 @@ class _HomePageState extends State<HomePage> {
                 const Text("Trending Now", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black)),
                 const SizedBox(height: 15),
 
-                // 6. PRODUCT GRID DARI API TERBARU
+                // 6. PRODUCT GRID DARI API
                 FutureBuilder<List<ProductData>>(
                   future: _productsFuture,
                   builder: (context, snapshot) {
@@ -184,12 +243,10 @@ class _HomePageState extends State<HomePage> {
                         crossAxisCount: 2,
                         crossAxisSpacing: 15,
                         mainAxisSpacing: 15,
-                        childAspectRatio: 0.60, // Diperpanjang sedikit agar tidak terpotong
+                        childAspectRatio: 0.60,
                       ),
                       itemBuilder: (context, index) {
                         final product = products[index];
-                        
-                        // Logika mengambil gambar: Prioritaskan properti 'images', jika kosong pakai placeholder
                         final String imageUrl = product.images.isNotEmpty 
                             ? product.images.first.imageUrl 
                             : 'https://via.placeholder.com/200';
@@ -221,7 +278,13 @@ class _HomePageState extends State<HomePage> {
         children: [
           Icon(icon, color: AppColors.primaryBlue, size: 24),
           const SizedBox(width: 12),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)),
+          Expanded(
+            child: Text(
+              title, 
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black)
+            ),
+          ),
         ],
       ),
     );
@@ -230,10 +293,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildProductCard(BuildContext context, ProductData product, String imageUrl) {
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => ProductDetailPage(productId: product.id)),
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (context) => ProductDetailPage(productId: product.id)));
       },
       child: Container(
         decoration: BoxDecoration(
@@ -249,26 +309,27 @@ class _HomePageState extends State<HomePage> {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   child: Image.network(
-                    imageUrl,
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => Container(
-                      height: 140,
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.broken_image, color: Colors.grey),
-                    ),
+                    imageUrl, height: 140, width: double.infinity, fit: BoxFit.cover,
+                    errorBuilder: (c, e, s) => Container(height: 140, color: Colors.grey[200], child: const Icon(Icons.broken_image, color: Colors.grey)),
                   ),
                 ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white.withOpacity(0.9),
-                    radius: 14,
-                    child: const Icon(Icons.favorite, color: AppColors.primaryBlue, size: 16),
-                  ),
-                ),
+               Positioned(
+  top: 10, right: 10,
+  child: GestureDetector(
+    onTap: () async {
+      await WishlistService().toggleWishlist(product.id);
+      setState(() {}); // Memperbarui state agar warna hati langsung berubah
+    },
+    child: CircleAvatar(
+      backgroundColor: Colors.white.withOpacity(0.9), radius: 14,
+      child: Icon(
+        WishlistService().isWishlisted(product.id) ? Icons.favorite : Icons.favorite_border, 
+        color: WishlistService().isWishlisted(product.id) ? Colors.red : Colors.grey, 
+        size: 16
+      ),
+    ),
+  ),
+),
               ],
             ),
             
@@ -277,40 +338,19 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    product.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black),
-                  ),
+                  Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black)),
                   const SizedBox(height: 4),
-                  // Menggunakan shortDescription dari API
-                  Text(
-                    product.shortDescription ?? product.type,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.grey, fontSize: 11),
-                  ),
+                  Text(product.shortDescription ?? product.type, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 11)),
                   const SizedBox(height: 12),
-                  Text(
-                    _currencyFormat.format(product.price),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primaryBlue),
-                  ),
+                  Text(_currencyFormat.format(product.price), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.primaryBlue)),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Menampilkan jumlah terjual dari API terbaru
-                      Text(
-                        "${product.soldCount} terjual", 
-                        style: const TextStyle(fontSize: 10, color: Colors.grey)
-                      ),
+                      Text("${product.soldCount} terjual", style: const TextStyle(fontSize: 10, color: Colors.grey)),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
                         child: const Row(
                           children: [
                             Icon(Icons.star, size: 10, color: AppColors.primaryBlue),

@@ -15,9 +15,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Ambil data keranjang dari Service
-    final cartItems = CartService().items;
-    final num subtotal = CartService().subtotal;
+    // PERBAIKAN: Hanya ambil item yang di-ceklis (selected)
+    final checkoutItems = CartService().items.where((i) => i.selected).toList();
+    
+    // PERBAIKAN: Gunakan totalSelectedPrice
+    final num subtotal = CartService().totalSelectedPrice; 
+    
     final num tax = subtotal * 0.08; // Contoh pajak layanan 8%
     final num grandTotal = subtotal + tax;
 
@@ -29,14 +32,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         elevation: 0,
         leading: const BackButton(color: AppColors.textDark),
       ),
-      body: cartItems.isEmpty 
-      ? const Center(child: Text("Keranjang Anda Kosong", style: TextStyle(fontSize: 18, color: Colors.grey)))
+      body: checkoutItems.isEmpty 
+      ? const Center(child: Text("Tidak ada barang yang dipilih", style: TextStyle(fontSize: 18, color: Colors.grey)))
       : SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Delivery Service Card (Statis sesuai desain)
+            // 1. Delivery Service Card (Statis)
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(color: AppColors.primaryBlue, borderRadius: BorderRadius.circular(24)),
@@ -73,24 +76,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text("Your Items", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("${cartItems.length} Items", style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.bold)),
+                Text("${checkoutItems.length} Items", style: const TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 15),
             
-            // 2. LIST PRODUK KERANJANG DINAMIS
+            // 2. LIST PRODUK CHECKOUT DINAMIS
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: cartItems.length,
+              itemCount: checkoutItems.length,
               itemBuilder: (context, index) {
-                final item = cartItems[index];
+                final item = checkoutItems[index];
                 final String imageUrl = item.product.images.isNotEmpty ? item.product.images.first.imageUrl : 'https://via.placeholder.com/100';
                 
                 return _buildOrderItem(
                   item.product.name, 
                   item.variant != null ? "Varian: ${item.variant!.name} (x${item.quantity})" : "Qty: ${item.quantity}", 
-                  _currencyFormat.format(item.totalPrice),
+                  // PERBAIKAN: Gunakan item.subtotal
+                  _currencyFormat.format(item.subtotal),
                   imageUrl,
                   item
                 );
@@ -163,7 +167,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             children: [
               Text(priceStr, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryBlue, fontSize: 13)),
               const SizedBox(height: 4),
-              // Tombol Hapus Barang (opsional)
               GestureDetector(
                 onTap: () {
                   setState(() { CartService().removeFromCart(item); });

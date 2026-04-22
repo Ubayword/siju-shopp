@@ -5,8 +5,14 @@ import '../models/product_model.dart';
 class ProductService {
   final String baseUrl = "https://api.isc-webdev.my.id/api/v1";
 
-  Future<List<ProductData>> getProducts() async {
-    final url = Uri.parse('$baseUrl/products');
+  Future<List<ProductData>> getProducts({String? search}) async {
+    // Jika ada kata kunci pencarian, tambahkan query string ke URL
+    String urlString = '$baseUrl/products';
+    if (search != null && search.isNotEmpty) {
+      urlString += '?search=$search'; // Sesuaikan query param dengan API backend Anda
+    }
+    
+    final url = Uri.parse(urlString);
 
     try {
       final response = await http.get(url, headers: {'Accept': 'application/json'});

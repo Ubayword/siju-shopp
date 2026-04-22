@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:siju_shopp/feature/home/home_page.dart';
+import 'package:siju_shopp/feature/profile/profile_page.dart';
 import 'core/app_colors.dart';
 
 void main() {
@@ -39,7 +40,7 @@ class _MainNavigationState extends State<MainNavigation> {
     const HomePage(),
     const Center(child: Text("Halaman Categories")),
     const Center(child: Text("Halaman Alerts")),
-    const Center(child: Text("Halaman Profile")),
+    const ProfilePage(),
   ];
 
   @override
