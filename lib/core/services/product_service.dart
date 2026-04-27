@@ -55,4 +55,22 @@ class ProductService {
       throw Exception("$e");
     }
   }
+
+  Future<List<ProductData>> getProductsByShop(String shopId) async {
+  final url = Uri.parse('$baseUrl/products?shop_id=$shopId'); // Sesuaikan parameter filter API Anda
+
+  try {
+    final response = await http.get(url, headers: {'Accept': 'application/json'});
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> jsonBody = json.decode(response.body);
+      // Menggunakan model yang sudah ada
+      return ProductListResponse.fromJson(jsonBody).data;
+    } else {
+      throw Exception("Gagal memuat produk toko");
+    }
+  } catch (e) {
+    throw Exception("Error: $e");
+  }
+}
 }

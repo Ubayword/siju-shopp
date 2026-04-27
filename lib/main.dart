@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:siju_shopp/feature/category/category_page.dart';
 import 'package:siju_shopp/feature/home/home_page.dart';
+import 'package:siju_shopp/feature/notification/notifcation_page.dart';
 import 'package:siju_shopp/feature/profile/profile_page.dart';
 import 'core/app_colors.dart';
 
@@ -38,8 +40,8 @@ class _MainNavigationState extends State<MainNavigation> {
   // Daftar halaman statis untuk sementara
   final List<Widget> _pages = [
     const HomePage(),
-    const Center(child: Text("Halaman Categories")),
-    const Center(child: Text("Halaman Alerts")),
+    const CategoryPage(),      // <--- Halaman Kategori terpasang
+    const NotificationPage(),  // <--- Halaman Alerts terpasang
     const ProfilePage(),
   ];
 

@@ -6,14 +6,32 @@ import '../models/auth_model.dart';
 class AuthService {
   final String baseUrl = "https://api.isc-webdev.my.id/api/v1";
 
-  Future<AuthResponse> login(String email, String password) async {
-    final url = Uri.parse('$baseUrl/auth/login'); // Disesuaikan dengan web
+  // ---------------------------------------------------------
+  // FUNGSI HELPER: Menerjemahkan Error Laravel ke Bahasa Indonesia
+  // ---------------------------------------------------------
+  String _mapLaravelError(String errorMsg) {
+    if (errorMsg.contains('validation.required')) return 'Kolom ini wajib diisi/dikirim.';
+    if (errorMsg.contains('validation.unique')) return 'Data ini sudah terdaftar.';
+    if (errorMsg.contains('validation.email')) return 'Format email tidak valid.';
+    if (errorMsg.contains('validation.min.string')) return 'Terlalu pendek.';
+    if (errorMsg.contains('validation.confirmed')) return 'Konfirmasi tidak cocok.';
+    return errorMsg;
+  }
+
+  // ---------------------------------------------------------
+  // FUNGSI LOGIN
+  // ---------------------------------------------------------
+  Future<AuthResponse> login(String username, String password) async {
+    final url = Uri.parse('$baseUrl/auth/login');
 
     try {
       final response = await http.post(
         url,
         headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-        body: json.encode({'email': email, 'password': password}),
+        body: json.encode({
+          'username': username, // Diubah dari email ke username
+          'password': password
+        }),
       );
 
       final Map<String, dynamic> responseBody = json.decode(response.body);
@@ -21,18 +39,55 @@ class AuthService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final authData = AuthResponse.fromJson(responseBody);
         await _saveToken(authData.token);
-        await _saveUserData(authData.user); // Simpan data user lokal
+        await _saveUserData(authData.user);
         return authData;
       } else {
-        throw Exception(responseBody['message'] ?? 'Login gagal. Periksa email dan password.');
+        if (responseBody.containsKey('errors')) {
+          final errors = responseBody['errors'] as Map<String, dynamic>;
+          throw Exception(_mapLaravelError(errors.values.first[0].toString()));
+        }
+        throw Exception(responseBody['message'] ?? 'Login gagal.');
       }
     } catch (e) {
-      throw Exception('Error: $e');
+      throw Exception(e.toString().replaceAll("Exception: ", ""));
     }
   }
 
-  Future<AuthResponse> register(String name, String email, String password, String passwordConfirmation) async {
-    final url = Uri.parse('$baseUrl/auth/signup'); // Disesuaikan dengan web
+  // FUNGSI BARU: Mengecek apakah user sudah klik link verifikasi di email
+  Future<bool> checkVerificationStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    
+    if (token == null) return false;
+
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/me'), // Memanggil data profil diri sendiri
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        // Di Laravel, jika email_verified_at tidak null, berarti sudah verifikasi
+        // Sesuaikan 'email_verified_at' dengan field dari API Anda
+        return data['data']['email_verified_at'] != null;
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print("Error checking status: $e");
+    }
+    return false;
+  }
+
+  // ---------------------------------------------------------
+  // FUNGSI REGISTER (BUAT AKUN)
+  // ---------------------------------------------------------
+  // Tambahkan 'String phone' di parameter
+  Future<AuthResponse> register(String name, String username, String email, String phone, String password, String passwordConfirmation) async {
+    final url = Uri.parse('$baseUrl/auth/signup');
 
     try {
       final response = await http.post(
@@ -40,7 +95,9 @@ class AuthService {
         headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
         body: json.encode({
           'name': name,
+          'username': username,
           'email': email,
+          'phone': phone, // <--- Kolom phone ditambahkan ke payload
           'password': password,
           'password_confirmation': passwordConfirmation,
         }),
@@ -54,45 +111,77 @@ class AuthService {
         await _saveUserData(authData.user);
         return authData;
       } else {
+        if (responseBody.containsKey('errors')) {
+          final errors = responseBody['errors'];
+          if (errors is Map) {
+            String failedField = errors.keys.first;
+            String errorMsg = errors.values.first[0].toString();
+            throw Exception("Ternyata Kolom [$failedField] kurang: ${_mapLaravelError(errorMsg)}");
+          } else if (errors is List) {
+            throw Exception(_mapLaravelError(errors[0].toString()));
+          }
+        }
         throw Exception(responseBody['message'] ?? 'Registrasi gagal.');
       }
     } catch (e) {
-      throw Exception('Error: $e');
+      throw Exception(e.toString().replaceAll("Exception: ", ""));
     }
   }
 
+  // Fungsi Verifikasi OTP (Sesuai web: POST /v1/auth/verify-otp)
+  Future<void> verifyOtp(String email, String otp) async {
+    final url = Uri.parse('$baseUrl/auth/verify-otp');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+        body: json.encode({'email': email, 'otp': otp}),
+      );
+
+      final Map<String, dynamic> responseBody = json.decode(response.body);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(responseBody['message'] ?? 'Kode OTP salah atau kadaluarsa.');
+      }
+    } catch (e) {
+      throw Exception(e.toString().replaceAll("Exception: ", ""));
+    }
+  }
+
+  // ---------------------------------------------------------
+  // FUNGSI LOGOUT
+  // ---------------------------------------------------------
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
 
-    // Memanggil API logout agar sesi di server (backend) juga terhapus persis seperti web
     if (token != null) {
       try {
         await http.post(
           Uri.parse('$baseUrl/auth/logout'),
-          headers: {
-            'Accept': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
+          headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
         );
       } catch (e) {
-        // Abaikan error jaringan saat logout, yang penting token lokal dihapus
+        // Abaikan error jaringan saat logout
       }
     }
-
-    // Hapus data dari memori HP
+    
+    // Hapus data dari HP
     await prefs.remove('auth_token');
     await prefs.remove('user_name');
     await prefs.remove('user_email');
     await prefs.remove('user_role');
   }
 
+  // ---------------------------------------------------------
+  // FUNGSI CEK STATUS LOGIN & AMBIL DATA
+  // ---------------------------------------------------------
   Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey('auth_token');
   }
 
-  // Mengambil data user yang tersimpan di HP
   Future<Map<String, String>> getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     return {
@@ -102,6 +191,9 @@ class AuthService {
     };
   }
 
+  // ---------------------------------------------------------
+  // FUNGSI INTERNAL (PRIVATE)
+  // ---------------------------------------------------------
   Future<void> _saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('auth_token', token);
